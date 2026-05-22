@@ -1,0 +1,537 @@
+# Streaming VS Taquilla Estadounidense
+# Natalia Valencia
+library(readxl)
+library(dplyr)
+
+base_final <- read_excel("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/base_streaming_taquilla USA.xlsx")
+
+cat("Observaciones:", nrow(base_final), "\n")
+print(names(base_final))
+
+# 01 - ESTADÍSTICAS DESCRIPTIVAS
+install.packages(c("stargazer", "openxlsx"))
+library(stargazer)
+library(openxlsx)
+variables_desc <- base_final %>%
+  select(
+    taquilla_semanal,
+    log_taquilla,
+    suscriptores_netflix,
+    ingresos_netflix,
+    delta_suscriptores,
+    num_estrenos,
+    desempleo_usa,
+    cpi_usa,
+    inflacion,
+    pib_usa,
+    netflix_x_covid
+  )
+
+stargazer(
+  as.data.frame(variables_desc),
+  type = "text",
+  title = "Estadísticas Descriptivas",
+  digits = 2,
+  summary.stat = c("n", "mean", "sd", "min", "median", "max")
+)
+
+tabla_desc <- data.frame(
+  Variable = c("taquilla_semanal", "log_taquilla", "suscriptores_netflix",
+               "ingresos_netflix", "delta_suscriptores", "num_estrenos",
+               "desempleo_usa", "cpi_usa", "inflacion", "pib_usa", "netflix_x_covid"),
+  N       = 410,
+  Media   = round(sapply(variables_desc, mean,   na.rm = TRUE), 2),
+  Std_Dev = round(sapply(variables_desc, sd,     na.rm = TRUE), 2),
+  Min     = round(sapply(variables_desc, min,    na.rm = TRUE), 2),
+  Mediana = round(sapply(variables_desc, median, na.rm = TRUE), 2),
+  Max     = round(sapply(variables_desc, max,    na.rm = TRUE), 2)
+)
+
+ruta <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/estadisticas_descriptivas.xlsx"
+write.xlsx(tabla_desc, ruta, rowNames = FALSE)
+
+install.packages("corrplot")
+library(corrplot)
+
+# GRÁFICA O FIGURA 1.1 Matriz de correlaciones
+install.packages("reshape2")
+library(ggplot2)
+library(reshape2)
+cor_melted <- melt(matriz_cor)
+grafica_cor <- ggplot(cor_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile(color = "white") +
+  geom_text(aes(label = round(value, 2)), size = 3, color = "black") +
+  scale_fill_gradient2(
+    low     = "#8B0000",
+    mid     = "white",
+    high    = "#1A3C5E",
+    midpoint = 0,
+    limits  = c(-1, 1),
+    name    = "Correlación"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x  = element_text(angle = 45, hjust = 1, size = 9),
+    axis.text.y  = element_text(size = 9),
+    plot.title   = element_text(hjust = 0.5, face = "bold", size = 13)
+  ) +
+  labs(title = "Matriz de Correlaciones", x = "", y = "")
+
+ruta_img <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/matriz_correlaciones.png"
+
+ggsave(ruta_img, plot = grafica_cor, width = 12, height = 10, dpi = 150)
+
+# TABLA 2: MEDIAS PRE vs. POST COVID
+tabla_covid <- base_final %>%
+  mutate(periodo = ifelse(dummy_covid == 0, 
+                          "Pre-COVID (2015 - feb 2020)", 
+                          "Post-COVID (mar 2020 - 2022)")) %>%
+  group_by(periodo) %>%
+  summarise(
+    Semanas              = n(),
+    Taquilla_Media       = round(mean(taquilla_semanal), 0),
+    Log_Taquilla_Media   = round(mean(log_taquilla), 2),
+    Suscriptores_Netflix = round(mean(suscriptores_netflix), 2),
+    Desempleo            = round(mean(desempleo_usa), 2),
+    PIB                  = round(mean(pib_usa), 2),
+    CPI                  = round(mean(cpi_usa), 2),
+    Num_Estrenos         = round(mean(num_estrenos), 1)
+  )
+
+print(tabla_covid)
+ruta <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla pre_post_covid.xlsx"
+write.xlsx(tabla_covid, ruta, rowNames = FALSE)
+
+# GRÁFICA 1.2: EVOLUCIÓN DE LA TAQUILLA SEMANAL
+library(ggplot2)
+library(scales)
+
+grafica_taquilla <- ggplot(base_final, aes(x = fecha, y = taquilla_semanal)) +
+  geom_line(color = "#8B0000", linewidth = 0.7, alpha = 0.8) +
+  geom_smooth(method = "loess", se = FALSE, color = "#1A3C5E", 
+              linewidth = 1.2, linetype = "dashed") +
+  geom_vline(xintercept = as.Date("2020-03-16"), 
+             color = "black", linewidth = 1, linetype = "dashed") +
+  annotate("text", x = as.Date("2020-05-01"), y = 450000000,
+           label = "Inicio COVID-19\n(mar 2020)", 
+           hjust = 0, size = 3.5, color = "black") +
+  scale_y_continuous(labels = label_dollar(scale = 1e-6, suffix = "M")) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(
+    title    = "Gráfica 1.2 Evolución de los ingresos semanales de taquilla en EE.UU. (2015–2022)",
+    subtitle = "Línea azul discontinua: tendencia suavizada (LOESS)",
+    x        = "",
+    y        = "Ingresos semanales (millones USD)",
+    caption  = "Fuente: Box Office Mojo"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0),
+    plot.subtitle = element_text(size = 9, color = "gray50"),
+    axis.text     = element_text(size = 9),
+    plot.caption  = element_text(size = 8, color = "gray50")
+  )
+
+ruta_g1 <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_taquilla_semanal.png"
+ggsave(ruta_g1, plot = grafica_taquilla, width = 12, height = 6, dpi = 150)
+
+# GRÁFICA 1.3: INGRESOS DE NETFLIX VS TAQUILLA ESTADOUNIDENSE (2015–2022)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(scales)
+base_final <- read_excel("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/base streaming_taquilla USA.xlsx")
+escala <- max(base_final$taquilla_semanal) / max(base_final$ingresos_netflix)
+
+grafica_netflix <- ggplot(base_final, aes(x = fecha)) +
+  geom_line(aes(y = taquilla_semanal, color = "Taquilla EE.UU."), linewidth = 0.7, alpha = 0.8) +
+  geom_line(aes(y = ingresos_netflix * escala, color = "Ingresos Netflix"), linewidth = 1.2) +
+  geom_vline(xintercept = as.Date("2020-03-16"),
+             color = "black", linewidth = 1, linetype = "dashed") +
+  annotate("text", x = as.Date("2020-05-01"), y = 450000000,
+           label = "Inicio COVID-19\n(mar 2020)", hjust = 0, size = 3.5) +
+  scale_y_continuous(
+    name   = "Taquilla semanal (millones USD)",
+    labels = label_dollar(scale = 1e-6, suffix = "M"),
+    sec.axis = sec_axis(~ . / escala,
+                        name   = "Ingresos Netflix (millones USD)",
+                        labels = label_dollar(suffix = "M"))
+  ) +
+  scale_color_manual(values = c("Taquilla EE.UU." = "#8B0000", "Ingresos Netflix" = "#1A3C5E")) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y") +
+  labs(
+    title   = "Gráfica 1.3. Ingresos de Netflix vs. taquilla estadounidense (2015–2022)",
+    x       = "",
+    color   = "",
+    caption = "Fuente: Box Office Mojo; Netflix Earnings Reports"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title      = element_text(face = "bold", size = 11, hjust = 0),
+    axis.text       = element_text(size = 9),
+    legend.position = "bottom",
+    plot.caption    = element_text(size = 8, color = "gray50")
+  )
+ruta_g2 <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_netflix_vs_taquilla.png"
+ggsave(ruta_g2, plot = grafica_netflix, width = 12, height = 6, dpi = 150)
+
+
+# GRÁFICA 1.4: DISTRIBUCIÓN DE INGRESOS DE TAQUILLA ANTES Y DESPUÉS
+#              DEL AJUSTE LOGARÍTMICO
+install.packages("patchwork")
+library(patchwork)
+base_final <- read_excel("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/base streaming_taquilla USA.xlsx")
+
+# Gráfica izquierda — taquilla sin transformar
+g_antes <- ggplot(base_final, aes(x = taquilla_semanal)) +
+  geom_histogram(fill = "#8B0000", color = "white", bins = 40, alpha = 0.85) +
+  scale_x_continuous(labels = label_dollar(scale = 1e-6, suffix = "M")) +
+  labs(
+    title    = "Antes del logaritmo",
+    subtitle = "Taquilla semanal (USD)",
+    x        = "Ingresos semanales",
+    y        = "Frecuencia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0.5),
+    plot.subtitle = element_text(size = 9, color = "gray50", hjust = 0.5),
+    axis.text     = element_text(size = 9)
+  )
+
+# Gráfica derecha — log taquilla
+g_despues <- ggplot(base_final, aes(x = log_taquilla)) +
+  geom_histogram(fill = "#1A3C5E", color = "white", bins = 40, alpha = 0.85) +
+  labs(
+    title    = "Después del logaritmo",
+    subtitle = "Log(Taquilla semanal)",
+    x        = "Log(Ingresos semanales)",
+    y        = "Frecuencia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0.5),
+    plot.subtitle = element_text(size = 9, color = "gray50", hjust = 0.5),
+    axis.text     = element_text(size = 9)
+  )
+grafica_log <- g_antes + g_despues +
+  plot_annotation(
+    title   = "Gráfica 1.4. Distribución de la taquilla antes y después de la transformación logarítmica",
+    caption = "Fuente: Box Office Mojo",
+    theme   = theme(
+      plot.title   = element_text(face = "bold", size = 11, hjust = 0.5),
+      plot.caption = element_text(size = 8, color = "gray50")
+    )
+  )
+ruta_g3 <- "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_distribucion_log.png"
+ggsave(ruta_g3, plot = grafica_log, width = 12, height = 6, dpi = 150)
+
+#REGRESIONES
+install.packages(c("sandwich", "lmtest", "car"))
+library(sandwich)  # Errores HAC Newey-West
+library(lmtest)    # coeftest() para aplicar errores robustos
+library(car)       # VIF
+# Especificación 1 — Solo Netflix
+reg1 <- lm(log_taquilla ~ suscriptores_netflix, data = base_final)
+coeftest(reg1, vcov = NeweyWest(reg1))
+library(ggplot2)
+ggplot(base_final, aes(x = suscriptores_netflix, y = log_taquilla,
+                        color = factor(dummy_covid))) +
+  geom_point(alpha = 0.5, size = 1.5) +
+  geom_smooth(method = "lm", se = TRUE, color = "#8B0000", linewidth = 1.2) +
+  scale_color_manual(
+    values = c("0" = "#1A3C5E", "1" = "#E07B39"),
+    labels = c("0" = "Pre-COVID", "1" = "COVID")
+  ) +
+  labs(
+    title    = "Gráfica 2.1 Relación entre suscriptores de Netflix y log(taquilla)",
+    subtitle = "Especificación 1 — Modelo simple sin controles",
+    x        = "Suscriptores de Netflix (millones)",
+    y        = "Log(Taquilla semanal)",
+    color    = "",
+    caption  = "Nota: la banda gris representa el intervalo de confianza al 95%"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0),
+    plot.subtitle = element_text(size = 9, color = "gray50"),
+    plot.caption  = element_text(size = 8, color = "gray50"),
+    legend.position = "bottom"
+  )
+
+ggsave("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_reg1.png",
+       width = 10, height = 6, dpi = 150)
+
+resultado_reg1 <- coeftest(reg1, vcov = NeweyWest(reg1))
+tabla_reg1 <- data.frame(
+  Variable    = c("Intercepto", "Suscriptores Netflix"),
+  Coeficiente = round(resultado_reg1[, "Estimate"], 4),
+  Error_Std   = round(resultado_reg1[, "Std. Error"], 4),
+  t_value     = round(resultado_reg1[, "t value"], 4),
+  p_value     = round(resultado_reg1[, "Pr(>|t|)"], 4),
+  Significancia = c("***", ".")
+)
+
+print(tabla_reg1)
+write.xlsx(tabla_reg1, 
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_reg1.xlsx",
+           rowNames = FALSE)
+           summary(reg1)$r.squared
+
+# Especificación 2 — + controles macro y oferta
+reg2 <- lm(log_taquilla ~ suscriptores_netflix + desempleo_usa + 
+           inflacion + num_estrenos, data = base_final)
+
+coeftest(reg2, vcov = NeweyWest(reg2))
+summary(reg2)$r.squared
+resultado_reg2 <- coeftest(reg2, vcov = NeweyWest(reg2))
+
+tabla_reg2 <- data.frame(
+  Variable      = c("Intercepto", "Suscriptores Netflix", "Desempleo EE.UU.", 
+                     "Inflación", "Número de estrenos"),
+  Coeficiente   = round(resultado_reg2[, "Estimate"], 4),
+  Error_Std     = round(resultado_reg2[, "Std. Error"], 4),
+  t_value       = round(resultado_reg2[, "t value"], 4),
+  p_value       = round(resultado_reg2[, "Pr(>|t|)"], 4),
+  Significancia = c("***", "***", "***", "", "***")
+)
+
+write.xlsx(tabla_reg2,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_reg2.xlsx",
+           rowNames = FALSE)
+
+# Especificación 3 — + estacionalidad, dummy COVID
+reg3 <- lm(log_taquilla ~ suscriptores_netflix + desempleo_usa + 
+           inflacion + num_estrenos + dummy_verano + 
+           dummy_diciembre + dummy_covid, data = base_final)
+coeftest(reg3, vcov = NeweyWest(reg3))
+summary(reg3)$r.squared
+resultado_reg3 <- coeftest(reg3, vcov = NeweyWest(reg3))
+tabla_reg3 <- data.frame(
+  Variable      = c("Intercepto", "Suscriptores Netflix", "Desempleo EE.UU.",
+                    "Inflación", "Número de estrenos", "Dummy verano",
+                    "Dummy diciembre", "Dummy COVID"),
+  Coeficiente   = round(resultado_reg3[, "Estimate"], 4),
+  Error_Std     = round(resultado_reg3[, "Std. Error"], 4),
+  t_value       = round(resultado_reg3[, "t value"], 4),
+  p_value       = round(resultado_reg3[, "Pr(>|t|)"], 4),
+  Significancia = c("***", "***", "***", "", "", ".", "", "")
+)
+write.xlsx(tabla_reg3,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_reg3.xlsx",
+           rowNames = FALSE)
+# Especificación 4 — Modelo completo con interacción
+reg4 <- lm(log_taquilla ~ suscriptores_netflix + desempleo_usa + 
+           inflacion + num_estrenos + dummy_verano + 
+           dummy_diciembre + dummy_covid + netflix_x_covid, 
+           data = base_final)
+coeftest(reg4, vcov = NeweyWest(reg4))
+summary(reg4)$r.squared
+resultado_reg4 <- coeftest(reg4, vcov = NeweyWest(reg4))
+tabla_reg4 <- data.frame(
+  Variable      = c("Intercepto", "Suscriptores Netflix", "Desempleo EE.UU.",
+                    "Inflación", "Número de estrenos", "Dummy verano",
+                    "Dummy diciembre", "Dummy COVID", "Netflix × COVID"),
+  Coeficiente   = round(resultado_reg4[, "Estimate"], 4),
+  Error_Std     = round(resultado_reg4[, "Std. Error"], 4),
+  t_value       = round(resultado_reg4[, "t value"], 4),
+  p_value       = round(resultado_reg4[, "Pr(>|t|)"], 4),
+  Significancia = c("***", "***", "***", "", "", ".", "", "*", "**")
+)
+write.xlsx(tabla_reg4,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_reg4.xlsx",
+           rowNames = FALSE)
+           base_final$predichos_reg4 <- fitted(reg4)
+           # Gráfico valores reales vs. predichos
+ggplot(base_final, aes(x = fecha)) +
+  geom_line(aes(y = log_taquilla, color = "Valores reales"), 
+            linewidth = 0.7, alpha = 0.9) +
+  geom_line(aes(y = predichos_reg4, color = "Valores predichos"), 
+            linewidth = 0.7, linetype = "dashed", alpha = 0.9) +
+  geom_vline(xintercept = as.Date("2020-03-16"),
+             color = "black", linewidth = 0.8, linetype = "dotted") +
+  annotate("text", x = as.Date("2020-05-01"), y = 20.5,
+           label = "Inicio COVID-19\n(mar 2020)",
+           hjust = 0, size = 3, color = "black") +
+  scale_color_manual(values = c("Valores reales" = "#1A3C5E",
+                                "Valores predichos" = "#8B0000")) +
+  labs(
+    title    = "Gráfica 2.2 Valores reales vs. predichos del log(taquilla)",
+    subtitle = "Especificación 4 — Modelo completo con interacción Netflix × COVID",
+    x        = "",
+    y        = "Log(Taquilla semanal)",
+    color    = "",
+    caption  = "Fuente: elaboración propia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0),
+    plot.subtitle = element_text(size = 9, color = "gray50"),
+    plot.caption  = element_text(size = 8, color = "gray50"),
+    legend.position = "bottom"
+  )
+ggsave("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_reg4_predichos.png",
+       width = 12, height = 6, dpi = 150)
+# ESPECIFICACIÓN 5 — Término cuadrático
+base_final$suscriptores_netflix2 <- base_final$suscriptores_netflix^2
+reg5_nuevo <- lm(log_taquilla ~ suscriptores_netflix + suscriptores_netflix2 +
+                        desempleo_usa + inflacion + num_estrenos + dummy_verano +
+                        dummy_diciembre + dummy_covid + netflix_x_covid,
+                        data = base_final)
+              coeftest(reg5_nuevo, vcov = NeweyWest(reg5_nuevo))
+       summary(reg5_nuevo)$r.squared
+       resultado_reg5_nuevo <- coeftest(reg5_nuevo, vcov = NeweyWest(reg5_nuevo))
+
+tabla_reg5_nuevo <- data.frame(
+  Variable      = c("Intercepto", "Suscriptores Netflix", "Suscriptores Netflix²",
+                    "Desempleo EE.UU.", "Inflación", "Número de estrenos",
+                    "Dummy verano", "Dummy diciembre", "Dummy COVID", "Netflix × COVID"),
+  Coeficiente   = round(resultado_reg5_nuevo[, "Estimate"], 6),
+  Error_Std     = round(resultado_reg5_nuevo[, "Std. Error"], 6),
+  t_value       = round(resultado_reg5_nuevo[, "t value"], 4),
+  p_value       = round(resultado_reg5_nuevo[, "Pr(>|t|)"], 4),
+  Significancia = c("***", ".", "", "***", "", "", ".", ".", "", "")
+)
+
+write.xlsx(tabla_reg5_nuevo,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_reg5_nuevo.xlsx",
+           rowNames = FALSE)
+           # GRÁFICA REG 5
+           ggplot(base_final, aes(x = suscriptores_netflix, y = log_taquilla,
+                        color = factor(dummy_covid))) +
+  geom_point(alpha = 0.4, size = 1.5) +
+  geom_smooth(method = "lm", formula = y ~ x + I(x^2), 
+              se = TRUE, color = "#8B0000", linewidth = 1.2) +
+  scale_color_manual(
+    values = c("0" = "#1A3C5E", "1" = "#E07B39"),
+    labels = c("0" = "Pre-COVID", "1" = "COVID")
+  ) +
+  labs(
+    title    = "Gráfica 2.3 Relación cuadrática entre suscriptores de Netflix y log(taquilla)",
+    subtitle = "Especificación 5 — Modelo con término cuadrático",
+    x        = "Suscriptores de Netflix (millones)",
+    y        = "Log(Taquilla semanal)",
+    color    = "",
+    caption  = "Nota: la banda gris representa el intervalo de confianza al 95%"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0),
+    plot.subtitle = element_text(size = 9, color = "gray50"),
+    plot.caption  = element_text(size = 8, color = "gray50"),
+    legend.position = "bottom"
+  )
+
+ggsave("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_reg5_cuadratico.png",
+       width = 10, height = 6, dpi = 150)
+       
+r1 <- coeftest(reg1, vcov = NeweyWest(reg1))
+r2 <- coeftest(reg2, vcov = NeweyWest(reg2))
+r3 <- coeftest(reg3, vcov = NeweyWest(reg3))
+r4 <- coeftest(reg4, vcov = NeweyWest(reg4))
+r5 <- coeftest(reg5_nuevo, vcov = NeweyWest(reg5_nuevo))
+
+extraer <- function(modelo, variable) {
+  if (variable %in% rownames(modelo)) {
+    coef <- round(modelo[variable, "Estimate"], 4)
+    pval <- modelo[variable, "Pr(>|t|)"]
+    sig  <- ifelse(pval < 0.001, "***",
+             ifelse(pval < 0.01, "**",
+              ifelse(pval < 0.05, "*",
+               ifelse(pval < 0.10, ".", ""))))
+    paste0(coef, sig)
+  } else {
+    "—"
+  }
+}
+
+tabla_comparativa_final <- data.frame(
+  Variable = c("Intercepto", "Suscriptores Netflix", "Suscriptores Netflix²",
+               "Desempleo EE.UU.", "Inflación", "Número de estrenos",
+               "Dummy verano", "Dummy diciembre", "Dummy COVID",
+               "Netflix × COVID", "N", "R²"),
+  Esp_1 = c(extraer(r1, "(Intercept)"), extraer(r1, "suscriptores_netflix"),
+             "—", "—", "—", "—", "—", "—", "—", "—", "410", "0.197"),
+  Esp_2 = c(extraer(r2, "(Intercept)"), extraer(r2, "suscriptores_netflix"),
+             "—", extraer(r2, "desempleo_usa"), extraer(r2, "inflacion"),
+             extraer(r2, "num_estrenos"), "—", "—", "—", "—", "410", "0.885"),
+  Esp_3 = c(extraer(r3, "(Intercept)"), extraer(r3, "suscriptores_netflix"),
+             "—", extraer(r3, "desempleo_usa"), extraer(r3, "inflacion"),
+             extraer(r3, "num_estrenos"), extraer(r3, "dummy_verano"),
+             extraer(r3, "dummy_diciembre"), extraer(r3, "dummy_covid"),
+             "—", "410", "0.890"),
+  Esp_4 = c(extraer(r4, "(Intercept)"), extraer(r4, "suscriptores_netflix"),
+             "—", extraer(r4, "desempleo_usa"), extraer(r4, "inflacion"),
+             extraer(r4, "num_estrenos"), extraer(r4, "dummy_verano"),
+             extraer(r4, "dummy_diciembre"), extraer(r4, "dummy_covid"),
+             extraer(r4, "netflix_x_covid"), "410", "0.900"),
+  Esp_5 = c(extraer(r5, "(Intercept)"), extraer(r5, "suscriptores_netflix"),
+             extraer(r5, "suscriptores_netflix2"), extraer(r5, "desempleo_usa"),
+             extraer(r5, "inflacion"), extraer(r5, "num_estrenos"),
+             extraer(r5, "dummy_verano"), extraer(r5, "dummy_diciembre"),
+             extraer(r5, "dummy_covid"), extraer(r5, "netflix_x_covid"),
+             "410", "0.900")
+)
+
+write.xlsx(tabla_comparativa_final,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_comparativa_final.xlsx",
+           rowNames = FALSE)
+# VIF sobre el modelo completo
+vif(reg4)
+
+tabla_vif <- data.frame(
+  Variable = c("Suscriptores Netflix", "Desempleo EE.UU.", "Inflación",
+               "Número de estrenos", "Dummy verano", "Dummy diciembre",
+               "Dummy COVID", "Netflix × COVID"),
+  VIF = round(c(7.436049, 7.490009, 1.052272,
+                6.083306, 1.114096, 1.060977,
+                979.206994, 881.116863), 2),
+  Diagnóstico = c("Aceptable", "Aceptable", "Excelente",
+                  "Aceptable", "Excelente", "Excelente",
+                  "Alto por construcción", "Alto por construcción")
+)
+
+write.xlsx(tabla_vif,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_vif.xlsx",
+           rowNames = FALSE)
+
+# Residuos del modelo completo (reg4)
+residuos <- residuals(reg4)
+
+# Shapiro-Wilk
+shapiro.test(residuos)
+
+# Kolmogorov-Smirnov
+ks.test(residuos, "pnorm", mean(residuos), sd(residuos))
+
+# Gráfico Q-Q
+ggplot(data.frame(residuos), aes(sample = residuos)) +
+  stat_qq(color = "#1A3C5E", alpha = 0.5, size = 1.5) +
+  stat_qq_line(color = "#8B0000", linewidth = 1) +
+  labs(
+    title    = "Gráfica 2.4 Q-Q plot de residuos — Especificación 5",
+    subtitle = "Evaluación de normalidad de los residuos del modelo completo",
+    x        = "Cuantiles teóricos",
+    y        = "Cuantiles muestrales",
+    caption  = "Fuente: elaboración propia"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title    = element_text(face = "bold", size = 11, hjust = 0),
+    plot.subtitle = element_text(size = 9, color = "gray50"),
+    plot.caption  = element_text(size = 8, color = "gray50")
+  )
+
+ggsave("C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/grafica_qq_residuos.png",
+       width = 8, height = 6, dpi = 150)
+
+       tabla_normalidad <- data.frame(
+  Prueba = c("Shapiro-Wilk", "Kolmogorov-Smirnov"),
+  Estadístico = c("W = 0.984", "D = 0.055"),
+  p_value = c("0.0002", "0.1645"),
+  Conclusión = c("Rechaza normalidad", "No rechaza normalidad")
+)
+
+write.xlsx(tabla_normalidad,
+           "C:/Users/natal/OneDrive/Personal/Universidad (1)/Noveno semestre/Analítica de datos/Caso Final/tabla_normalidad.xlsx",
+           rowNames = FALSE)
